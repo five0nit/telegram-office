@@ -20,13 +20,47 @@ import { EditorState } from './office/editor/editorState.js';
 import { EditorToolbar } from './office/editor/EditorToolbar.js';
 import { OfficeState } from './office/engine/officeState.js';
 import { isRotatable } from './office/layout/furnitureCatalog.js';
-import { EditTool } from './office/types.js';
+import { EditTool, type OfficeLayout,TILE_SIZE, TileType } from './office/types.js';
 import { isBrowserRuntime } from './runtime.js';
 import { transport } from './transport/index.js';
 
 // Game state lives outside React — updated imperatively by message handlers
 const officeStateRef = { current: null as OfficeState | null };
 const editorState = new EditorState();
+
+const MOBILE_WIDTH_BREAKPOINT_PX = 640;
+const MOBILE_LANDSCAPE_BREAKPOINT_PX = 900;
+
+interface OccupiedBounds {
+  minCol: number;
+  maxCol: number;
+  minRow: number;
+  maxRow: number;
+}
+
+function getOccupiedBounds(layout: OfficeLayout): OccupiedBounds | null {
+  let minCol = layout.cols;
+  let maxCol = -1;
+  let minRow = layout.rows;
+  let maxRow = -1;
+
+  for (let row = 0; row < layout.rows; row += 1) {
+    for (let col = 0; col < layout.cols; col += 1) {
+      if (layout.tiles[row * layout.cols + col] !== TileType.VOID) {
+        minCol = Math.min(minCol, col);
+        maxCol = Math.max(maxCol, col);
+        minRow = Math.min(minRow, row);
+        maxRow = Math.max(maxRow, row);
+      }
+    }
+  }
+
+  if (maxCol < 0 || maxRow < 0) {
+    return null;
+  }
+
+  return { minCol, maxCol, minRow, maxRow };
+}
 
 function getOfficeState(): OfficeState {
   if (!officeStateRef.current) {
@@ -86,8 +120,28 @@ function App() {
   const [hooksTooltipDismissed, setHooksTooltipDismissed] = useState(false);
   const [isDebugMode, setIsDebugMode] = useState(false);
   const [alwaysShowOverlay, setAlwaysShowOverlay] = useState(false);
+  const demoBubbleTimersRef = useRef<number[]>([]);
+  const [demoBubbleTick, setDemoBubbleTick] = useState(0);
+  const [viewport, setViewport] = useState(() => ({
+    width: typeof window === 'undefined' ? 1280 : window.innerWidth,
+    height: typeof window === 'undefined' ? 720 : window.innerHeight,
+  }));
+  const initialViewportFramedRef = useRef(false);
 
   const currentMajorMinor = toMajorMinor(extensionVersion);
+  const isCompactMobile =
+    viewport.width <= MOBILE_WIDTH_BREAKPOINT_PX ||
+    (viewport.width <= MOBILE_LANDSCAPE_BREAKPOINT_PX && viewport.height > viewport.width);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleResize = () => {
+      setViewport({ width: window.innerWidth, height: window.innerHeight });
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const handleWhatsNewDismiss = useCallback(() => {
     transport.send({ type: 'setLastSeenVersion', version: currentMajorMinor });
@@ -115,6 +169,73 @@ function App() {
   const handleSelectAgent = useCallback((id: number) => {
     transport.send({ type: 'focusAgent', id });
   }, []);
+
+  const clearDemoBubbleTimers = useCallback(() => {
+    for (const timer of demoBubbleTimersRef.current) {
+      window.clearTimeout(timer);
+    }
+    demoBubbleTimersRef.current = [];
+  }, []);
+
+  const handleTriggerDemoBubbles = useCallback(() => {
+    const os = getOfficeState();
+    const characters = os
+      .getCharacters()
+      .filter((ch) => !ch.isSubagent)
+      .sort((a, b) => a.id - b.id);
+    if (characters.length === 0) return;
+
+    clearDemoBubbleTimers();
+
+    const demos = [
+      {
+        tool: 'TelegramReply',
+        run: (id: number) => os.showTelegramEvent(id, 'thinking', 'Drafting reply', 'Demo'),
+      },
+      {
+        tool: 'Bash',
+        run: () => undefined,
+      },
+      {
+        tool: 'TelegramRead',
+        run: (id: number) => os.showTelegramEvent(id, 'message_received', 'Incoming ping', 'Demo'),
+      },
+      {
+        tool: 'TelegramReply',
+        run: (id: number) => os.showTelegramEvent(id, 'message_sent', 'Sent update', 'Demo'),
+      },
+      {
+        tool: null,
+        run: (id: number) => {
+          os.showWaitingBubble(id);
+          os.showTelegramEvent(id, 'waiting', 'Awaiting approval', 'Demo');
+        },
+      },
+    ] as const;
+
+    for (let index = 0; index < Math.min(demos.length, characters.length); index += 1) {
+      const character = characters[index];
+      const demo = demos[index];
+      os.clearTelegramEvent(character.id);
+      os.clearPermissionBubble(character.id);
+      os.setAgentTool(character.id, demo.tool);
+      demo.run(character.id);
+    }
+
+    setDemoBubbleTick((tick) => tick + 1);
+
+    const resetTimer = window.setTimeout(() => {
+      for (let index = 0; index < Math.min(demos.length, characters.length); index += 1) {
+        const character = characters[index];
+        os.setAgentTool(character.id, null);
+        os.clearTelegramEvent(character.id);
+      }
+      setDemoBubbleTick((tick) => tick + 1);
+      demoBubbleTimersRef.current = demoBubbleTimersRef.current.filter((timer) => timer !== resetTimer);
+    }, 6500);
+
+    demoBubbleTimersRef.current.push(resetTimer);
+  }, [clearDemoBubbleTimers]);
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -145,8 +266,52 @@ function App() {
 
   const officeState = getOfficeState();
 
+  useEffect(() => {
+    if (!layoutReady || initialViewportFramedRef.current) return;
+
+    const layout = officeState.getLayout();
+    const occupiedBounds = getOccupiedBounds(layout);
+    if (!occupiedBounds) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const horizontalPadding = isCompactMobile ? 24 : 220;
+    const verticalPadding = isCompactMobile ? 164 : 180;
+    const usableWidth = Math.max(240, viewport.width - horizontalPadding) * dpr;
+    const usableHeight = Math.max(240, viewport.height - verticalPadding) * dpr;
+    const occupiedWidth = (occupiedBounds.maxCol - occupiedBounds.minCol + 1) * TILE_SIZE;
+    const occupiedHeight = (occupiedBounds.maxRow - occupiedBounds.minRow + 1) * TILE_SIZE;
+    const fitZoom = Math.floor(
+      Math.min((usableWidth * 0.96) / occupiedWidth, (usableHeight * 0.9) / occupiedHeight),
+    );
+    const minZoom = isCompactMobile ? 3 : 4;
+    const maxZoom = isCompactMobile ? 6 : 8;
+    const nextZoom = Math.max(
+      minZoom,
+      Math.min(maxZoom, Number.isFinite(fitZoom) && fitZoom > 0 ? fitZoom : editor.zoom),
+    );
+
+    if (nextZoom !== editor.zoom) {
+      editor.handleZoomChange(nextZoom);
+    }
+
+    const centerCol = (occupiedBounds.minCol + occupiedBounds.maxCol + 1) / 2;
+    const centerRow = (occupiedBounds.minRow + occupiedBounds.maxRow + 1) / 2;
+    const mapWidth = layout.cols * TILE_SIZE * nextZoom;
+    const mapHeight = layout.rows * TILE_SIZE * nextZoom;
+    const toolbarBias = Math.round(viewport.height * dpr * (isCompactMobile ? 0.07 : 0.03));
+
+    editor.panRef.current = {
+      x: mapWidth / 2 - centerCol * TILE_SIZE * nextZoom,
+      y: mapHeight / 2 - centerRow * TILE_SIZE * nextZoom - toolbarBias,
+    };
+    initialViewportFramedRef.current = true;
+  }, [editor, isCompactMobile, layoutReady, officeState, viewport.height, viewport.width]);
+
+  useEffect(() => () => clearDemoBubbleTimers(), [clearDemoBubbleTimers]);
+
   // Force dependency on editorTickForKeyboard to propagate keyboard-triggered re-renders
   void editorTickForKeyboard;
+  void demoBubbleTick;
 
   // Show "Press R to rotate" hint when a rotatable item is selected or being placed
   const showRotateHint =
@@ -192,7 +357,11 @@ function App() {
 
       {!isDebugMode ? (
         <>
-          <ZoomControls zoom={editor.zoom} onZoomChange={editor.handleZoomChange} />
+          <ZoomControls
+            zoom={editor.zoom}
+            onZoomChange={editor.handleZoomChange}
+            isCompactMobile={isCompactMobile}
+          />
 
           {/* Vignette overlay */}
           <div
@@ -245,6 +414,7 @@ function App() {
             officeState={officeState}
             agents={agents}
             agentTools={agentTools}
+            agentStatuses={agentStatuses}
             subagentCharacters={subagentCharacters}
             containerRef={containerRef}
             zoom={editor.zoom}
@@ -252,6 +422,22 @@ function App() {
             onCloseAgent={handleCloseAgent}
             alwaysShowOverlay={alwaysShowOverlay}
           />
+
+          {isBrowserRuntime && agents.length === 0 && !editor.isEditMode && (
+            <div className="absolute top-10 left-1/2 -translate-x-1/2 z-20 max-w-xl pixel-panel px-12 py-10 text-center">
+              <div className="text-xs uppercase tracking-wide text-text-muted mb-4">
+                Standalone browser office
+              </div>
+              <div className="text-base text-text mb-4">
+                This fork now treats the browser office as the main product surface.
+              </div>
+              <div className="text-sm text-text-muted leading-relaxed">
+                No VS Code hooks or Claude session scanning run on startup. The next step is wiring
+                Telegram events into this office so messages, mentions, and commands animate desks,
+                workers, and room activity.
+              </div>
+            </div>
+          )}
         </>
       ) : (
         <DebugView
@@ -265,7 +451,7 @@ function App() {
       )}
 
       {/* Hooks first-run tooltip */}
-      {!hooksInfoShown && !hooksTooltipDismissed && (
+      {!isBrowserRuntime && !hooksInfoShown && !hooksTooltipDismissed && (
         <Tooltip
           title="Instant Detection Active"
           position="top-right"
@@ -291,36 +477,38 @@ function App() {
       )}
 
       {/* Hooks info modal */}
-      <Modal
-        isOpen={isHooksInfoOpen}
-        onClose={() => setIsHooksInfoOpen(false)}
-        title="Instant Detection is ON"
-        zIndex={52}
-      >
-        <div className="text-base text-text px-10" style={{ lineHeight: 1.4 }}>
-          <p className="mb-8">Your Pixel Agents office now reacts in real-time:</p>
-          <ul className="mb-8 pl-18 list-disc m-0">
-            <li className="text-sm mb-2">Permission prompts appear instantly</li>
-            <li className="text-sm mb-2">Turn completions detected the moment they happen</li>
-            <li className="text-sm mb-2">Sound notifications play immediately</li>
-          </ul>
-          <p className="mb-12 text-text-muted">
-            This works through Claude Code Hooks, small event listeners that notify Pixel Agents
-            whenever something happens in your Claude sessions.
-          </p>
-          <div className="text-center">
-            <button
-              onClick={() => setIsHooksInfoOpen(false)}
-              className="py-4 px-20 text-lg bg-accent text-white border-2 border-accent rounded-none cursor-pointer shadow-pixel"
-            >
-              Got it
-            </button>
+      {!isBrowserRuntime && (
+        <Modal
+          isOpen={isHooksInfoOpen}
+          onClose={() => setIsHooksInfoOpen(false)}
+          title="Instant Detection is ON"
+          zIndex={52}
+        >
+          <div className="text-base text-text px-10" style={{ lineHeight: 1.4 }}>
+            <p className="mb-8">Your Pixel Agents office now reacts in real-time:</p>
+            <ul className="mb-8 pl-18 list-disc m-0">
+              <li className="text-sm mb-2">Permission prompts appear instantly</li>
+              <li className="text-sm mb-2">Turn completions detected the moment they happen</li>
+              <li className="text-sm mb-2">Sound notifications play immediately</li>
+            </ul>
+            <p className="mb-12 text-text-muted">
+              This works through Claude Code Hooks, small event listeners that notify Pixel Agents
+              whenever something happens in your Claude sessions.
+            </p>
+            <div className="text-center">
+              <button
+                onClick={() => setIsHooksInfoOpen(false)}
+                className="py-4 px-20 text-lg bg-accent text-white border-2 border-accent rounded-none cursor-pointer shadow-pixel"
+              >
+                Got it
+              </button>
+            </div>
+            <p className="mt-8 text-xs text-text-muted text-center">
+              To disable, go to Settings {'>'} Instant Detection
+            </p>
           </div>
-          <p className="mt-8 text-xs text-text-muted text-center">
-            To disable, go to Settings {'>'} Instant Detection
-          </p>
-        </div>
-      </Modal>
+        </Modal>
+      )}
 
       <BottomToolbar
         isEditMode={editor.isEditMode}
@@ -329,6 +517,7 @@ function App() {
         isSettingsOpen={isSettingsOpen}
         onToggleSettings={() => setIsSettingsOpen((v) => !v)}
         workspaceFolders={workspaceFolders}
+        isCompactMobile={isCompactMobile}
       />
 
       <VersionIndicator
@@ -336,6 +525,7 @@ function App() {
         lastSeenVersion={lastSeenVersion}
         onDismiss={handleWhatsNewDismiss}
         onOpenChangelog={handleOpenChangelog}
+        isCompactMobile={isCompactMobile}
       />
 
       <ChangelogModal
@@ -364,6 +554,7 @@ function App() {
           setHooksEnabled(newVal);
           transport.send({ type: 'setHooksEnabled', enabled: newVal });
         }}
+        onTriggerDemoBubbles={handleTriggerDemoBubbles}
       />
 
       {showMigrationNotice && (

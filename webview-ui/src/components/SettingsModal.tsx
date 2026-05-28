@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { isSoundEnabled, setSoundEnabled } from '../notificationSound.js';
+import { isBrowserRuntime } from '../runtime.js';
 import { transport } from '../transport/index.js';
 import { Button } from './ui/Button.js';
 import { Checkbox } from './ui/Checkbox.js';
@@ -19,6 +20,7 @@ interface SettingsModalProps {
   onToggleWatchAllSessions: () => void;
   hooksEnabled: boolean;
   onToggleHooksEnabled: () => void;
+  onTriggerDemoBubbles: () => void;
 }
 
 export function SettingsModal({
@@ -33,19 +35,23 @@ export function SettingsModal({
   onToggleWatchAllSessions,
   hooksEnabled,
   onToggleHooksEnabled,
+  onTriggerDemoBubbles,
 }: SettingsModalProps) {
   const [soundLocal, setSoundLocal] = useState(isSoundEnabled);
+  const browserRuntime = isBrowserRuntime;
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Settings">
-      <MenuItem
-        onClick={() => {
-          transport.send({ type: 'openSessionsFolder' });
-          onClose();
-        }}
-      >
-        Open Sessions Folder
-      </MenuItem>
+      {!browserRuntime && (
+        <MenuItem
+          onClick={() => {
+            transport.send({ type: 'openSessionsFolder' });
+            onClose();
+          }}
+        >
+          Open Sessions Folder
+        </MenuItem>
+      )}
       <MenuItem
         onClick={() => {
           transport.send({ type: 'exportLayout' });
@@ -88,6 +94,23 @@ export function SettingsModal({
           </Button>
         </div>
       ))}
+      {browserRuntime && (
+        <>
+          <div className="px-10 py-6 text-xs text-text-muted leading-relaxed">
+            Standalone mode is currently passive by default: no Claude hooks, no session scanning,
+            and no external config changes unless you explicitly wire in an event source later.
+          </div>
+          <div className="px-10 pb-6">
+            <Button variant="accent" size="md" onClick={onTriggerDemoBubbles} className="w-full">
+              Trigger Demo Bubbles
+            </Button>
+            <div className="mt-3 text-[11px] text-text-muted leading-relaxed">
+              Fires a visible mix of thinking, tool, incoming, sent, and waiting bubbles so you can
+              confirm the office visuals are working even when Telegram is quiet.
+            </div>
+          </div>
+        </>
+      )}
       <Checkbox
         label="Sound Notifications"
         checked={soundLocal}
@@ -98,16 +121,20 @@ export function SettingsModal({
           transport.send({ type: 'setSoundEnabled', enabled: newVal });
         }}
       />
-      <Checkbox
-        label="Watch All Sessions"
-        checked={watchAllSessions}
-        onChange={onToggleWatchAllSessions}
-      />
-      <Checkbox
-        label="Instant Detection (Hooks)"
-        checked={hooksEnabled}
-        onChange={onToggleHooksEnabled}
-      />
+      {!browserRuntime && (
+        <>
+          <Checkbox
+            label="Watch All Sessions"
+            checked={watchAllSessions}
+            onChange={onToggleWatchAllSessions}
+          />
+          <Checkbox
+            label="Instant Detection (Hooks)"
+            checked={hooksEnabled}
+            onChange={onToggleHooksEnabled}
+          />
+        </>
+      )}
       <Checkbox
         label="Always Show Labels"
         checked={alwaysShowOverlay}

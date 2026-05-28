@@ -194,6 +194,8 @@ function handleWebviewReady(send: WsSend, ctx: ClientMessageContext): void {
   const agentIds: number[] = [];
   const folderNames: Record<number, string> = {};
   const externalAgents: Record<number, boolean> = {};
+  const teamNames: Record<number, string> = {};
+  const agentNames: Record<number, string> = {};
   for (const [id, agent] of store) {
     agentIds.push(id);
     if (agent.folderName) {
@@ -201,6 +203,12 @@ function handleWebviewReady(send: WsSend, ctx: ClientMessageContext): void {
     }
     if (agent.isExternal) {
       externalAgents[id] = true;
+    }
+    if (agent.teamName) {
+      teamNames[id] = agent.teamName;
+    }
+    if (agent.agentName) {
+      agentNames[id] = agent.agentName;
     }
   }
   const seats = adapter?.loadSeats() ?? {};
@@ -210,5 +218,7 @@ function handleWebviewReady(send: WsSend, ctx: ClientMessageContext): void {
     agentMeta: seats,
     folderNames,
     externalAgents,
+    teamNames,
+    agentNames,
   });
 }

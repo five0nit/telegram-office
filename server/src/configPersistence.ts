@@ -34,7 +34,7 @@ export interface PixelAgentsConfig {
   externalAssetDirectories: string[];
 }
 
-const DEFAULT_ADAPTER_SETTINGS: AdapterSettings = {
+const DEFAULT_VSCODE_SETTINGS: AdapterSettings = {
   soundEnabled: true,
   lastSeenVersion: '',
   alwaysShowLabels: false,
@@ -43,38 +43,47 @@ const DEFAULT_ADAPTER_SETTINGS: AdapterSettings = {
   hooksInfoShown: false,
 };
 
+const DEFAULT_STANDALONE_SETTINGS: AdapterSettings = {
+  soundEnabled: true,
+  lastSeenVersion: '',
+  alwaysShowLabels: false,
+  watchAllSessions: false,
+  hooksEnabled: false,
+  hooksInfoShown: true,
+};
+
 function getConfigFilePath(): string {
   return path.join(os.homedir(), LAYOUT_FILE_DIR, CONFIG_FILE_NAME);
 }
 
 /** Coerce a loose object into a valid AdapterSettings with defaults for missing/wrong-typed fields. */
-function parseAdapterSettings(raw: unknown): AdapterSettings {
+function parseAdapterSettings(raw: unknown, defaults: AdapterSettings): AdapterSettings {
   const obj = (raw && typeof raw === 'object' ? raw : {}) as Partial<AdapterSettings>;
   return {
     soundEnabled:
       typeof obj.soundEnabled === 'boolean'
         ? obj.soundEnabled
-        : DEFAULT_ADAPTER_SETTINGS.soundEnabled,
+        : defaults.soundEnabled,
     lastSeenVersion:
       typeof obj.lastSeenVersion === 'string'
         ? obj.lastSeenVersion
-        : DEFAULT_ADAPTER_SETTINGS.lastSeenVersion,
+        : defaults.lastSeenVersion,
     alwaysShowLabels:
       typeof obj.alwaysShowLabels === 'boolean'
         ? obj.alwaysShowLabels
-        : DEFAULT_ADAPTER_SETTINGS.alwaysShowLabels,
+        : defaults.alwaysShowLabels,
     watchAllSessions:
       typeof obj.watchAllSessions === 'boolean'
         ? obj.watchAllSessions
-        : DEFAULT_ADAPTER_SETTINGS.watchAllSessions,
+        : defaults.watchAllSessions,
     hooksEnabled:
       typeof obj.hooksEnabled === 'boolean'
         ? obj.hooksEnabled
-        : DEFAULT_ADAPTER_SETTINGS.hooksEnabled,
+        : defaults.hooksEnabled,
     hooksInfoShown:
       typeof obj.hooksInfoShown === 'boolean'
         ? obj.hooksInfoShown
-        : DEFAULT_ADAPTER_SETTINGS.hooksInfoShown,
+        : defaults.hooksInfoShown,
   };
 }
 
@@ -83,16 +92,16 @@ export function readConfig(): PixelAgentsConfig {
   try {
     if (!fs.existsSync(filePath)) {
       return {
-        vscode: { ...DEFAULT_ADAPTER_SETTINGS },
-        standalone: { ...DEFAULT_ADAPTER_SETTINGS },
+        vscode: { ...DEFAULT_VSCODE_SETTINGS },
+        standalone: { ...DEFAULT_STANDALONE_SETTINGS },
         externalAssetDirectories: [],
       };
     }
     const raw = fs.readFileSync(filePath, 'utf-8');
     const parsed = JSON.parse(raw) as Partial<PixelAgentsConfig>;
     return {
-      vscode: parseAdapterSettings(parsed.vscode),
-      standalone: parseAdapterSettings(parsed.standalone),
+      vscode: parseAdapterSettings(parsed.vscode, DEFAULT_VSCODE_SETTINGS),
+      standalone: parseAdapterSettings(parsed.standalone, DEFAULT_STANDALONE_SETTINGS),
       externalAssetDirectories: Array.isArray(parsed.externalAssetDirectories)
         ? parsed.externalAssetDirectories.filter((d): d is string => typeof d === 'string')
         : [],
@@ -100,8 +109,8 @@ export function readConfig(): PixelAgentsConfig {
   } catch (err) {
     console.error('[Pixel Agents] Failed to read config file:', err);
     return {
-      vscode: { ...DEFAULT_ADAPTER_SETTINGS },
-      standalone: { ...DEFAULT_ADAPTER_SETTINGS },
+      vscode: { ...DEFAULT_VSCODE_SETTINGS },
+      standalone: { ...DEFAULT_STANDALONE_SETTINGS },
       externalAssetDirectories: [],
     };
   }

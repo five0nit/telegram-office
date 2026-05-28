@@ -58,6 +58,12 @@ export interface AgentState {
   leadAgentId?: number;
   /** True when lead spawns teammates via tmux (run_in_background Agent calls) */
   teamUsesTmux?: boolean;
+  /** Stable external identity for non-Claude roster-backed agents */
+  rosterKey?: string;
+  /** Telegram bot/account handle for roster-backed agents */
+  telegramBot?: string;
+  /** Source type for non-terminal agents */
+  sourceKind?: string;
 }
 
 export interface PersistedAgent {
@@ -78,4 +84,7 @@ export interface PersistedAgent {
   isTeamLead?: boolean;
   leadAgentId?: number;
   teamUsesTmux?: boolean;
+  rosterKey?: string;
+  telegramBot?: string;
+  sourceKind?: string;
 }

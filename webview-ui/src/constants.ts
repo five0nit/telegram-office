@@ -52,6 +52,15 @@ export const BUTTON_LINE_WIDTH_ZOOM_FACTOR = 0.5;
 export const BUBBLE_FADE_DURATION_SEC = 0.5;
 export const BUBBLE_SITTING_OFFSET_PX = 10;
 export const BUBBLE_VERTICAL_OFFSET_PX = 24;
+export const THOUGHT_BUBBLE_OUTLINE_COLOR = '#111111';
+export const THOUGHT_BUBBLE_FILL_COLOR = '#ffffff';
+export const THOUGHT_BUBBLE_TOOL_BODY_COLOR = '#1f2937';
+export const THOUGHT_BUBBLE_TOOL_ACCENT_COLOR = '#60a5fa';
+export const THOUGHT_BUBBLE_TOOL_BIT_COLOR = '#9ca3af';
+export const THOUGHT_BUBBLE_BULB_COLOR = '#fde047';
+export const THOUGHT_BUBBLE_BULB_BASE_COLOR = '#f59e0b';
+export const THOUGHT_BUBBLE_MESSAGE_COLOR = '#93c5fd';
+export const THOUGHT_BUBBLE_SENT_COLOR = '#16a34a';
 export const FALLBACK_FLOOR_COLOR = '#808080';
 
 // ── Rendering - Overlay Colors (canvas, not CSS) ─────────────

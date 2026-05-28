@@ -30,6 +30,15 @@ import {
   SELECTED_OUTLINE_ALPHA,
   SELECTION_DASH_PATTERN,
   SELECTION_HIGHLIGHT_COLOR,
+  THOUGHT_BUBBLE_BULB_BASE_COLOR,
+  THOUGHT_BUBBLE_BULB_COLOR,
+  THOUGHT_BUBBLE_FILL_COLOR,
+  THOUGHT_BUBBLE_MESSAGE_COLOR,
+  THOUGHT_BUBBLE_OUTLINE_COLOR,
+  THOUGHT_BUBBLE_SENT_COLOR,
+  THOUGHT_BUBBLE_TOOL_ACCENT_COLOR,
+  THOUGHT_BUBBLE_TOOL_BIT_COLOR,
+  THOUGHT_BUBBLE_TOOL_BODY_COLOR,
   VOID_TILE_DASH_PATTERN,
   VOID_TILE_OUTLINE_COLOR,
 } from '../../constants.js';
@@ -40,6 +49,8 @@ import {
   BUBBLE_WAITING_SPRITE,
   getCharacterSprites,
 } from '../sprites/spriteData.js';
+import type { ThoughtBubbleKind } from '../thoughtBubbles.js';
+import { getThoughtBubbleKind } from '../thoughtBubbles.js';
 import type {
   Character,
   FurnitureInstance,
@@ -494,32 +505,143 @@ function renderBubbles(
   zoom: number,
 ): void {
   for (const ch of characters) {
-    if (!ch.bubbleType) continue;
+    const bubbleKind = getThoughtBubbleKind(ch);
+    if (!bubbleKind) continue;
 
-    const sprite =
-      ch.bubbleType === 'permission' ? BUBBLE_PERMISSION_SPRITE : BUBBLE_WAITING_SPRITE;
-
-    // Compute opacity: permission = full, waiting = fade in last 0.5s
+    // Compute opacity: permission/tool/thinking = full, waiting/transient telegram = fade at tail end
     let alpha = 1.0;
-    if (ch.bubbleType === 'waiting' && ch.bubbleTimer < BUBBLE_FADE_DURATION_SEC) {
+    if (bubbleKind === 'waiting' && ch.bubbleTimer < BUBBLE_FADE_DURATION_SEC) {
       alpha = ch.bubbleTimer / BUBBLE_FADE_DURATION_SEC;
+    } else if (
+      (bubbleKind === 'thinking' || bubbleKind === 'incoming' || bubbleKind === 'sent') &&
+      ch.telegramEventTimer > 0 &&
+      ch.telegramEventTimer < BUBBLE_FADE_DURATION_SEC
+    ) {
+      alpha = ch.telegramEventTimer / BUBBLE_FADE_DURATION_SEC;
     }
 
-    const cached = getCachedSprite(sprite, zoom);
-    // Position: centered above the character's head
-    // Character is anchored bottom-center at (ch.x, ch.y), sprite is 16x24
-    // Place bubble above head with a small gap; follow sitting offset
     const sittingOff = ch.state === CharacterState.TYPE ? BUBBLE_SITTING_OFFSET_PX : 0;
-    const bubbleX = Math.round(offsetX + ch.x * zoom - cached.width / 2);
-    const bubbleY = Math.round(
-      offsetY + (ch.y + sittingOff - BUBBLE_VERTICAL_OFFSET_PX) * zoom - cached.height - 1 * zoom,
-    );
 
-    ctx.save();
-    if (alpha < 1.0) ctx.globalAlpha = alpha;
-    ctx.drawImage(cached, bubbleX, bubbleY);
-    ctx.restore();
+    if (bubbleKind === 'permission' || bubbleKind === 'waiting') {
+      const sprite =
+        bubbleKind === 'permission' ? BUBBLE_PERMISSION_SPRITE : BUBBLE_WAITING_SPRITE;
+      const cached = getCachedSprite(sprite, zoom);
+      const bubbleX = Math.round(offsetX + ch.x * zoom - cached.width / 2);
+      const bubbleY = Math.round(
+        offsetY + (ch.y + sittingOff - BUBBLE_VERTICAL_OFFSET_PX) * zoom - cached.height - 1 * zoom,
+      );
+
+      ctx.save();
+      if (alpha < 1.0) ctx.globalAlpha = alpha;
+      ctx.drawImage(cached, bubbleX, bubbleY);
+      ctx.restore();
+      continue;
+    }
+
+    renderDynamicThoughtBubble(
+      ctx,
+      bubbleKind,
+      offsetX + ch.x * zoom,
+      offsetY + (ch.y + sittingOff - BUBBLE_VERTICAL_OFFSET_PX) * zoom,
+      zoom,
+      alpha,
+    );
   }
+}
+
+function renderDynamicThoughtBubble(
+  ctx: CanvasRenderingContext2D,
+  bubbleKind: Exclude<ThoughtBubbleKind, 'permission' | 'waiting'>,
+  anchorX: number,
+  anchorY: number,
+  zoom: number,
+  alpha: number,
+): void {
+  const px = Math.max(1, Math.round(zoom));
+  const width = 11 * px;
+  const height = 13 * px;
+  const bubbleX = Math.round(anchorX - width / 2);
+  const bubbleY = Math.round(anchorY - height - px);
+
+  ctx.save();
+  if (alpha < 1.0) ctx.globalAlpha = alpha;
+
+  // Pixel bubble shell
+  ctx.fillStyle = THOUGHT_BUBBLE_OUTLINE_COLOR;
+  ctx.fillRect(bubbleX + px, bubbleY, width - 2 * px, px);
+  ctx.fillRect(bubbleX, bubbleY + px, width, height - 4 * px);
+  ctx.fillRect(bubbleX + px, bubbleY + height - 4 * px, width - 2 * px, px);
+  ctx.fillRect(bubbleX + 4 * px, bubbleY + height - 3 * px, 3 * px, px);
+  ctx.fillRect(bubbleX + 5 * px, bubbleY + height - 2 * px, 2 * px, px);
+  ctx.fillRect(bubbleX + 5 * px, bubbleY + height - px, px, px);
+
+  ctx.fillStyle = THOUGHT_BUBBLE_FILL_COLOR;
+  ctx.fillRect(bubbleX + px, bubbleY + px, width - 2 * px, height - 5 * px);
+  ctx.fillRect(bubbleX + 5 * px, bubbleY + height - 3 * px, px, px);
+
+  renderThoughtBubbleIcon(ctx, bubbleKind, bubbleX, bubbleY, px);
+  ctx.restore();
+}
+
+function renderThoughtBubbleIcon(
+  ctx: CanvasRenderingContext2D,
+  bubbleKind: Exclude<ThoughtBubbleKind, 'permission' | 'waiting'>,
+  bubbleX: number,
+  bubbleY: number,
+  px: number,
+): void {
+  const ix = bubbleX + 2 * px;
+  const iy = bubbleY + 2 * px;
+
+  if (bubbleKind === 'tool') {
+    // Drill / power-tool icon
+    ctx.fillStyle = THOUGHT_BUBBLE_TOOL_BODY_COLOR;
+    ctx.fillRect(ix + px, iy + 2 * px, 4 * px, 2 * px);
+    ctx.fillRect(ix + 2 * px, iy + 4 * px, px, 2 * px);
+    ctx.fillRect(ix + 4 * px, iy + 4 * px, px, 2 * px);
+    ctx.fillStyle = THOUGHT_BUBBLE_TOOL_ACCENT_COLOR;
+    ctx.fillRect(ix + 2 * px, iy + 3 * px, 2 * px, px);
+    ctx.fillStyle = THOUGHT_BUBBLE_TOOL_BIT_COLOR;
+    ctx.fillRect(ix + 5 * px, iy + 2 * px, 2 * px, px);
+    ctx.fillRect(ix + 7 * px, iy + 2 * px, px, px);
+    ctx.fillRect(ix + 6 * px, iy + 3 * px, px, px);
+    return;
+  }
+
+  if (bubbleKind === 'thinking') {
+    // Light bulb icon
+    ctx.fillStyle = THOUGHT_BUBBLE_OUTLINE_COLOR;
+    ctx.fillRect(ix + 2 * px, iy + px, 3 * px, px);
+    ctx.fillRect(ix + px, iy + 2 * px, 5 * px, 3 * px);
+    ctx.fillRect(ix + 2 * px, iy + 5 * px, 3 * px, px);
+    ctx.fillRect(ix + 2 * px, iy + 6 * px, 2 * px, px);
+    ctx.fillStyle = THOUGHT_BUBBLE_BULB_COLOR;
+    ctx.fillRect(ix + 2 * px, iy + 2 * px, 3 * px, 3 * px);
+    ctx.fillStyle = THOUGHT_BUBBLE_BULB_BASE_COLOR;
+    ctx.fillRect(ix + 2 * px, iy + 6 * px, 2 * px, px);
+    return;
+  }
+
+  if (bubbleKind === 'incoming') {
+    // Envelope / incoming message icon
+    ctx.fillStyle = THOUGHT_BUBBLE_OUTLINE_COLOR;
+    ctx.fillRect(ix + px, iy + 2 * px, 6 * px, 4 * px);
+    ctx.fillStyle = THOUGHT_BUBBLE_MESSAGE_COLOR;
+    ctx.fillRect(ix + 2 * px, iy + 3 * px, 4 * px, 2 * px);
+    ctx.fillStyle = THOUGHT_BUBBLE_OUTLINE_COLOR;
+    ctx.fillRect(ix + 2 * px, iy + 3 * px, px, px);
+    ctx.fillRect(ix + 5 * px, iy + 3 * px, px, px);
+    ctx.fillRect(ix + 3 * px, iy + 4 * px, px, px);
+    ctx.fillRect(ix + 4 * px, iy + 4 * px, px, px);
+    return;
+  }
+
+  // Sent / reply arrow icon
+  ctx.fillStyle = THOUGHT_BUBBLE_SENT_COLOR;
+  ctx.fillRect(ix + px, iy + 3 * px, 4 * px, px);
+  ctx.fillRect(ix + 4 * px, iy + 2 * px, 2 * px, px);
+  ctx.fillRect(ix + 5 * px, iy + px, 2 * px, px);
+  ctx.fillRect(ix + 5 * px, iy + 4 * px, 2 * px, px);
 }
 
 export interface ButtonBounds {

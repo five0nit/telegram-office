@@ -138,6 +138,9 @@ export class AgentStateStore {
         isTeamLead: agent.isTeamLead,
         leadAgentId: agent.leadAgentId,
         teamUsesTmux: agent.teamUsesTmux,
+        rosterKey: agent.rosterKey,
+        telegramBot: agent.telegramBot,
+        sourceKind: agent.sourceKind,
       });
     }
     this.adapter.saveAgents(persisted);

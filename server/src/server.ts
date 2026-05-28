@@ -66,12 +66,19 @@ export class PixelAgentsServer {
     // Check if another instance already has a server running
     const existing = this.readServerJson();
     if (existing && isProcessRunning(existing.pid)) {
-      this.config = existing;
-      this.ownsServer = false;
-      console.log(
-        `[Pixel Agents] Reusing existing server on port ${existing.port} (PID ${existing.pid})`,
+      const reusable = await canReuseExistingServer(existing);
+      if (reusable) {
+        this.config = existing;
+        this.ownsServer = false;
+        console.log(
+          `[Pixel Agents] Reusing existing server on port ${existing.port} (PID ${existing.pid})`,
+        );
+        return existing;
+      }
+
+      console.warn(
+        `[Pixel Agents] Ignoring stale server discovery file for port ${existing.port} (PID ${existing.pid})`,
       );
-      return existing;
     }
 
     // Start our own server
@@ -100,7 +107,7 @@ export class PixelAgentsServer {
     };
     this.ownsServer = true;
     this.writeServerJson(this.config);
-    console.log(`[Pixel Agents] Server: listening on 127.0.0.1:${port}`);
+    console.log(`[Pixel Agents] Server: listening on ${options?.host ?? '127.0.0.1'}:${port}`);
 
     return this.config;
   }
@@ -167,6 +174,24 @@ export class PixelAgentsServer {
     } catch {
       // File may already be gone
     }
+  }
+}
+
+async function canReuseExistingServer(config: ServerConfig): Promise<boolean> {
+  if (!Number.isInteger(config.port) || config.port <= 0 || config.port > 65535) {
+    return false;
+  }
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${config.port}/api/health`, {
+      signal: AbortSignal.timeout(1_500),
+    });
+    if (!response.ok) return false;
+
+    const body = (await response.json()) as { pid?: unknown; status?: unknown };
+    return body.status === 'ok' && body.pid === config.pid;
+  } catch {
+    return false;
   }
 }
 

@@ -9,6 +9,7 @@ interface VersionIndicatorProps {
   lastSeenVersion: string;
   onDismiss: () => void;
   onOpenChangelog: () => void;
+  isCompactMobile?: boolean;
 }
 
 export function VersionIndicator({
@@ -16,6 +17,7 @@ export function VersionIndicator({
   lastSeenVersion,
   onDismiss,
   onOpenChangelog,
+  isCompactMobile = false,
 }: VersionIndicatorProps) {
   const [dismissed, setDismissed] = useState(false);
   const [fading, setFading] = useState(false);
@@ -57,35 +59,44 @@ export function VersionIndicator({
 
   if (!currentVersion) return null;
 
+  const noticeClass = isCompactMobile
+    ? 'absolute bottom-30 left-4 right-4 z-20 pixel-panel px-8 pt-6 pb-7 cursor-pointer flex flex-col gap-5'
+    : 'absolute bottom-42 right-28 z-20 pixel-panel px-10 pt-8 pb-9 cursor-pointer flex flex-col gap-8 max-w-2xs';
+  const tooltipClass = isCompactMobile
+    ? 'absolute bottom-30 right-4 z-20 pixel-panel py-5 px-8 cursor-pointer text-xs whitespace-nowrap'
+    : 'absolute bottom-42 right-28 z-20 pixel-panel py-6 px-12 cursor-pointer text-sm whitespace-nowrap';
+  const versionLabelClass = isCompactMobile
+    ? 'absolute bottom-18 right-4 z-20 text-sm cursor-pointer select-none pr-2 transition-opacity duration-200'
+    : 'absolute bottom-8 right-28 z-20 text-lg cursor-pointer select-none pr-2 transition-opacity duration-200';
+
   return (
     <>
       {/* Update notice — shown once per version until dismissed or auto-closed */}
       {showUpdateNotice && (
         <div
           onClick={handleOpenChangelog}
-          className="absolute bottom-42 right-28 z-20 pixel-panel px-10 pt-8 pb-9 cursor-pointer flex flex-col gap-8 max-w-2xs"
+          className={noticeClass}
           style={{
             opacity: fading ? 0 : 1,
             transition: `opacity ${WHATS_NEW_FADE_MS / 1000}s ease-out`,
           }}
         >
-          <div className="flex justify-between items-center gap-10">
-            <span className="text-lg text-accent-bright leading-none">
+          <div className={`flex justify-between items-center ${isCompactMobile ? 'gap-6' : 'gap-10'}`}>
+            <span className={`${isCompactMobile ? 'text-base' : 'text-lg'} text-accent-bright leading-none`}>
               Updated to v{currentMajorMinor}!
             </span>
             <Button variant="ghost" size="icon" onClick={handleDismiss} className="leading-none">
               x
             </Button>
           </div>
-          <span className="text-sm whitespace-nowrap">See what's new</span>
+          <span className={`${isCompactMobile ? 'text-xs' : 'text-sm'} whitespace-nowrap`}>
+            See what's new
+          </span>
         </div>
       )}
       {/* Hover tooltip — "See what's new" appears on label hover after notice is gone */}
       {!showUpdateNotice && labelHovered && (
-        <div
-          onClick={handleOpenChangelog}
-          className="absolute bottom-42 right-28 z-20 pixel-panel py-6 px-12 cursor-pointer text-sm whitespace-nowrap"
-        >
+        <div onClick={handleOpenChangelog} className={tooltipClass}>
           See what's new!
         </div>
       )}
@@ -94,7 +105,7 @@ export function VersionIndicator({
         onMouseEnter={() => setLabelHovered(true)}
         onMouseLeave={() => setLabelHovered(false)}
         onClick={handleOpenChangelog}
-        className="absolute bottom-8 right-28 z-20 text-lg cursor-pointer select-none pr-2 transition-opacity duration-200"
+        className={versionLabelClass}
         style={{ opacity: labelHovered ? 0.8 : 0.4 }}
       >
         v{currentMajorMinor}

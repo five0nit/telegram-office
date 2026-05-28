@@ -26,9 +26,9 @@
 
 Pixel Agents turns multi-agent AI systems into something you can actually see and manage. Each agent becomes a character in a pixel art office. They walk around, sit at their desk, and visually reflect what they are doing — typing when writing code, reading when searching files, waiting when it needs your attention.
 
-Right now it works as a VS Code extension with Claude Code. The vision though, is a fully agent-agnostic, platform-agnostic interface for orchestrating any AI agents, deployable anywhere.
+This fork is being reshaped into a **standalone, browser-first office runtime** for **Telegram-triggered events**. VS Code support remains in the upstream architecture, but the main product direction here is a browser office fed by external event sources rather than an editor panel tied to Claude terminals.
 
-This is the source code for the free Pixel Agents extension for VS Code — install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=pablodelucca.pixel-agents) or [Open VSX](https://open-vsx.org/extension/pablodelucca/pixel-agents) with the full furniture catalog included.
+This repository currently serves as the adaptation base: browser UI, server, state model, and rendering engine first; Telegram ingestion and event routing next.
 
 ![Pixel Agents screenshot](webview-ui/public/Screenshot.jpg)
 
@@ -50,27 +50,91 @@ This is the source code for the free Pixel Agents extension for VS Code — inst
 
 ## Requirements
 
+### Current fork focus
+
+- Browser UI + standalone server
+- Local development with Node/npm
+- No Claude hook installation or VS Code coupling required for the default standalone path
+
+### Upstream compatibility notes
+
 - VS Code 1.105.0 or later
 - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and configured
 - **Platform**: Windows, Linux, and macOS are supported
 
 ## Getting Started
 
-If you just want to use Pixel Agents, the easiest way is to download the [VS Code extension](https://marketplace.visualstudio.com/items?itemName=pablodelucca.pixel-agents). If you want to play with the code, develop, or contribute, then:
-
-### Install from source
+### Browser-first standalone development
 
 ```bash
-git clone https://github.com/pixel-agents-hq/pixel-agents.git
-cd pixel-agents
+git clone <your-fork-or-local-clone>
+cd telegram-office
 npm install
 cd webview-ui && npm install && cd ..
 npm run build
 ```
 
-Then press **F5** in VS Code to launch the Extension Development Host.
+Then run the standalone server/browser flow for local development. In this fork, standalone mode is being treated as the primary product surface and starts in **passive mode** by default — no Claude hooks and no automatic session scanning on startup.
+
+### Telegram roster + live log-driven events
+
+The browser office now supports **real Telegram-driven activity** by tailing Hermes `gateway.log` files for roster-backed bots.
+
+Create or edit `~/.pixel-agents/telegram-roster.json`:
+
+```json
+{
+  "agents": [
+    {
+      "key": "pb1",
+      "label": "🤖pB1🤖",
+      "telegramBot": "@Backupmik3bot",
+      "profile": "default",
+      "enabled": true
+    },
+    {
+      "key": "pb2",
+      "label": "🤖pB2🤖",
+      "telegramBot": "@Hermes2bitbot",
+      "profile": "generalist1",
+      "enabled": true
+    },
+    {
+      "key": "pb3",
+      "label": "🤖pB3🤖",
+      "telegramBot": "@Backup3bitbot",
+      "profile": "generalist2",
+      "enabled": true
+    }
+  ]
+}
+```
+
+Supported live-source fields per agent:
+- `profile`: resolves to Hermes `gateway.log` automatically (`default`, `generalist1`, `generalist2`, etc.)
+- `logPath`: explicit path to a gateway log when profile-based resolution is not enough
+
+When a roster entry has either `profile` or `logPath`, the standalone server tails that log and converts Telegram activity into office reactions:
+- inbound Telegram message → `message_received`
+- short delay while the bot is working → `thinking`
+- response emitted → `message_sent`
+- cooldown after reply → `idle`
+
+### Upstream VS Code flow
+
+If you want the original extension workflow, the upstream development path still exists:
 
 ### Usage
+
+#### Standalone browser-first mode
+
+1. Start the standalone server
+2. Open the browser office UI
+3. Edit the office layout and asset packs as needed
+4. Keep the office passive while wiring your own external event source
+5. Next implementation target: Telegram messages -> normalized office events -> in-world reactions
+
+#### Upstream VS Code mode
 
 1. Open the **Pixel Agents** panel (it appears in the bottom panel area alongside your terminal)
 2. Click **+ Agent** to spawn a new Claude Code terminal and its character. Right-click for the option to launch with `--dangerously-skip-permissions` (bypasses all tool approval prompts)

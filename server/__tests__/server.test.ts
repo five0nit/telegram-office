@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import * as http from 'http';
 import * as os from 'os';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -15,6 +16,7 @@ vi.mock('os', async () => {
 
 // Must import AFTER mock setup
 const { PixelAgentsServer } = await import('../src/server.js');
+const { AgentStateStore } = await import('../src/agentStateStore.js');
 
 async function postHook(
   port: number,
@@ -29,6 +31,21 @@ async function postHook(
       Authorization: `Bearer ${token}`,
     },
     body,
+  });
+}
+
+async function postTelegramEvent(
+  port: number,
+  token: string,
+  body: Record<string, unknown>,
+): Promise<Response> {
+  return fetch(`http://127.0.0.1:${port}/api/telegram/events`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(body),
   });
 }
 
@@ -158,6 +175,51 @@ describe('PixelAgentsServer', () => {
     server2.stop(); // should not delete server.json (not owner)
   });
 
+  it('does not reuse a stale discovery file when the pid is alive but the health endpoint is missing', async () => {
+    fs.writeFileSync(
+      serverJsonPath,
+      JSON.stringify({ port: 65534, pid: process.pid, token: 'fake', startedAt: 0 }),
+    );
+
+    const config = await server.start();
+    expect(config.pid).toBe(process.pid);
+    expect(config.port).not.toBe(65534);
+    expect(fs.existsSync(serverJsonPath)).toBe(true);
+    const json = JSON.parse(fs.readFileSync(serverJsonPath, 'utf-8')) as {
+      pid: number;
+      port: number;
+      token: string;
+    };
+    expect(json.pid).toBe(process.pid);
+    expect(json.port).toBe(config.port);
+    expect(json.token).toBe(config.token);
+  });
+
+  it('does not reuse a discovery file when another server answers health with the wrong pid', async () => {
+    const foreignServer = http.createServer((_req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ status: 'ok', pid: 123456 }));
+    });
+    await new Promise<void>((resolve) => foreignServer.listen(0, '127.0.0.1', () => resolve()));
+    const address = foreignServer.address();
+    const foreignPort = typeof address === 'object' && address ? address.port : 0;
+
+    try {
+      fs.writeFileSync(
+        serverJsonPath,
+        JSON.stringify({ port: foreignPort, pid: process.pid, token: 'fake', startedAt: 0 }),
+      );
+
+      const config = await server.start();
+      expect(config.pid).toBe(process.pid);
+      expect(config.port).not.toBe(foreignPort);
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        foreignServer.close((err) => (err ? reject(err) : resolve()));
+      });
+    }
+  });
+
   // 11. server.json cleaned up on stop
   it('deletes server.json on stop', async () => {
     await server.start();
@@ -199,5 +261,70 @@ describe('PixelAgentsServer', () => {
     );
 
     expect(received).toHaveLength(0);
+  });
+
+  it('telegram office events require auth and broadcast to a roster-backed agent', async () => {
+    const store = new AgentStateStore();
+    store.set(7, {
+      id: 7,
+      sessionId: 'telegram-roster-7',
+      isExternal: true,
+      projectDir: '/tmp/telegram-office',
+      jsonlFile: '',
+      fileOffset: 0,
+      lineBuffer: '',
+      activeToolIds: new Set(),
+      activeToolStatuses: new Map(),
+      activeToolNames: new Map(),
+      activeSubagentToolIds: new Map(),
+      activeSubagentToolNames: new Map(),
+      backgroundAgentToolIds: new Set(),
+      isWaiting: false,
+      permissionSent: false,
+      hadToolsInTurn: false,
+      lastDataAt: 0,
+      linesProcessed: 0,
+      seenUnknownRecordTypes: new Set(),
+      hookDelivered: false,
+      inputTokens: 0,
+      outputTokens: 0,
+      rosterKey: 'backup',
+      telegramBot: '@Backupmik3bot',
+      sourceKind: 'telegram-roster',
+    });
+    const broadcasts: Record<string, unknown>[] = [];
+    store.on('broadcast', (message) => broadcasts.push(message));
+
+    const config = await server.start({ store });
+
+    const unauth = await fetch(`http://127.0.0.1:${config.port}/api/telegram/events`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rosterKey: 'backup', eventType: 'message_received' }),
+    });
+    expect(unauth.status).toBe(401);
+
+    const ok = await postTelegramEvent(config.port, config.token, {
+      rosterKey: 'backup',
+      eventType: 'message_received',
+      chatLabel: 'Mike',
+      preview: 'Need a hand with the office?',
+    });
+    expect(ok.status).toBe(200);
+    const payload = (await ok.json()) as { ok: boolean; agentId: number };
+    expect(payload.ok).toBe(true);
+    expect(payload.agentId).toBe(7);
+    expect(broadcasts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'agentStatus', id: 7, status: 'active' }),
+        expect.objectContaining({
+          type: 'telegramOfficeEvent',
+          id: 7,
+          rosterKey: 'backup',
+          eventType: 'message_received',
+          chatLabel: 'Mike',
+        }),
+      ]),
+    );
   });
 });

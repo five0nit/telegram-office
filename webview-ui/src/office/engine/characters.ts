@@ -19,7 +19,7 @@ import { CharacterState, Direction, TILE_SIZE } from '../types.js';
  *  from the active HookProvider via the `providerCapabilities` message. */
 export function isReadingTool(tool: string | null): boolean {
   if (!tool) return false;
-  return isReadingToolName(tool);
+  return isReadingToolName(tool) || tool === 'TelegramRead';
 }
 
 /** Pixel center of a tile */
@@ -77,6 +77,10 @@ export function createCharacter(
     seatId,
     bubbleType: null,
     bubbleTimer: 0,
+    telegramEventType: null,
+    telegramChatLabel: undefined,
+    telegramPreview: undefined,
+    telegramEventTimer: 0,
     seatTimer: 0,
     isSubagent: false,
     parentAgentId: null,
@@ -92,6 +96,7 @@ export function updateCharacter(
   ch: Character,
   dt: number,
   walkableTiles: Array<{ col: number; row: number }>,
+  idleHangoutTiles: Array<{ col: number; row: number }>,
   seats: Map<string, Seat>,
   tileMap: TileTypeVal[][],
   blockedTiles: Set<string>,
@@ -185,8 +190,9 @@ export function updateCharacter(
             }
           }
         }
-        if (walkableTiles.length > 0) {
-          const target = walkableTiles[Math.floor(Math.random() * walkableTiles.length)];
+        const wanderTiles = idleHangoutTiles.length > 0 ? idleHangoutTiles : walkableTiles;
+        if (wanderTiles.length > 0) {
+          const target = wanderTiles[Math.floor(Math.random() * wanderTiles.length)];
           const path = findPath(
             ch.tileCol,
             ch.tileRow,

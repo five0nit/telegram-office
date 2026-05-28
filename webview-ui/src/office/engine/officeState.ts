@@ -34,6 +34,8 @@ import { CharacterState, Direction, MATRIX_EFFECT_DURATION, TILE_SIZE } from '..
 import { createCharacter, updateCharacter } from './characters.js';
 import { matrixEffectSeeds } from './matrixEffect.js';
 
+const TELEGRAM_EVENT_DURATION_SEC = 6;
+
 export class OfficeState {
   layout: OfficeLayout;
   tileMap: TileTypeVal[][];
@@ -41,6 +43,7 @@ export class OfficeState {
   blockedTiles: Set<string>;
   furniture: FurnitureInstance[];
   walkableTiles: Array<{ col: number; row: number }>;
+  idleHangoutTiles: Array<{ col: number; row: number }>;
   characters: Map<number, Character> = new Map();
   /** Accumulated time for furniture animation frame cycling */
   furnitureAnimTimer = 0;
@@ -61,6 +64,7 @@ export class OfficeState {
     this.blockedTiles = getBlockedTiles(this.layout.furniture);
     this.furniture = layoutToFurnitureInstances(this.layout.furniture);
     this.walkableTiles = getWalkableTiles(this.tileMap, this.blockedTiles);
+    this.idleHangoutTiles = this.computeIdleHangoutTiles();
   }
 
   /** Rebuild all derived state from a new layout. Reassigns existing characters.
@@ -72,6 +76,7 @@ export class OfficeState {
     this.blockedTiles = getBlockedTiles(layout.furniture);
     this.rebuildFurnitureInstances();
     this.walkableTiles = getWalkableTiles(this.tileMap, this.blockedTiles);
+    this.idleHangoutTiles = this.computeIdleHangoutTiles();
 
     // Shift character positions when grid expands left/up
     if (shift && (shift.col !== 0 || shift.row !== 0)) {
@@ -155,6 +160,14 @@ export class OfficeState {
 
   getLayout(): OfficeLayout {
     return this.layout;
+  }
+
+  /** Prefer a distinct left-side hangout zone for inactive wandering when the map supports it. */
+  private computeIdleHangoutTiles(): Array<{ col: number; row: number }> {
+    const splitCol = Math.max(1, Math.floor(this.layout.cols / 2) - 1);
+    const minRow = Math.max(1, Math.floor(this.layout.rows * 0.58));
+    const hangoutTiles = this.walkableTiles.filter((tile) => tile.col < splitCol && tile.row >= minRow);
+    return hangoutTiles.length > 0 ? hangoutTiles : this.walkableTiles;
   }
 
   /** Get the blocked-tile key for a character's own seat, or null */
@@ -648,6 +661,29 @@ export class OfficeState {
     }
   }
 
+  showTelegramEvent(
+    id: number,
+    eventType: 'message_received' | 'message_sent' | 'thinking' | 'waiting' | 'idle',
+    preview?: string,
+    chatLabel?: string,
+  ): void {
+    const ch = this.characters.get(id);
+    if (!ch) return;
+    ch.telegramEventType = eventType;
+    ch.telegramPreview = preview;
+    ch.telegramChatLabel = chatLabel;
+    ch.telegramEventTimer = eventType === 'idle' ? 0 : TELEGRAM_EVENT_DURATION_SEC;
+  }
+
+  clearTelegramEvent(id: number): void {
+    const ch = this.characters.get(id);
+    if (!ch) return;
+    ch.telegramEventType = null;
+    ch.telegramPreview = undefined;
+    ch.telegramChatLabel = undefined;
+    ch.telegramEventTimer = 0;
+  }
+
   showPermissionBubble(id: number): void {
     const ch = this.characters.get(id);
     if (ch) {
@@ -682,6 +718,9 @@ export class OfficeState {
     } else if (ch.bubbleType === 'waiting') {
       // Trigger immediate fade (0.3s remaining)
       ch.bubbleTimer = Math.min(ch.bubbleTimer, DISMISS_BUBBLE_FAST_FADE_SEC);
+    }
+    if (ch.telegramEventType === 'waiting') {
+      this.clearTelegramEvent(id);
     }
   }
 
@@ -741,7 +780,15 @@ export class OfficeState {
 
       // Temporarily unblock own seat so character can pathfind to it
       this.withOwnSeatUnblocked(ch, () =>
-        updateCharacter(ch, dt, this.walkableTiles, this.seats, this.tileMap, this.blockedTiles),
+        updateCharacter(
+          ch,
+          dt,
+          this.walkableTiles,
+          this.idleHangoutTiles,
+          this.seats,
+          this.tileMap,
+          this.blockedTiles,
+        ),
       );
 
       // Tick bubble timer for waiting bubbles
@@ -750,6 +797,18 @@ export class OfficeState {
         if (ch.bubbleTimer <= 0) {
           ch.bubbleType = null;
           ch.bubbleTimer = 0;
+        }
+      }
+
+      if (ch.telegramEventTimer > 0) {
+        ch.telegramEventTimer -= dt;
+        if (ch.telegramEventTimer <= 0) {
+          ch.telegramEventTimer = 0;
+          if (ch.telegramEventType !== 'waiting') {
+            ch.telegramEventType = null;
+            ch.telegramPreview = undefined;
+            ch.telegramChatLabel = undefined;
+          }
         }
       }
     }

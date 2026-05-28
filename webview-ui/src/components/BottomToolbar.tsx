@@ -13,6 +13,7 @@ interface BottomToolbarProps {
   isSettingsOpen: boolean;
   onToggleSettings: () => void;
   workspaceFolders: WorkspaceFolder[];
+  isCompactMobile: boolean;
 }
 
 export function BottomToolbar({
@@ -22,6 +23,7 @@ export function BottomToolbar({
   isSettingsOpen,
   onToggleSettings,
   workspaceFolders,
+  isCompactMobile,
 }: BottomToolbarProps) {
   const [isFolderPickerOpen, setIsFolderPickerOpen] = useState(false);
   const [isBypassMenuOpen, setIsBypassMenuOpen] = useState(false);
@@ -41,6 +43,9 @@ export function BottomToolbar({
   }, [isFolderPickerOpen, isBypassMenuOpen]);
 
   const hasMultipleFolders = workspaceFolders.length > 1;
+  const toolbarClass = isCompactMobile
+    ? 'absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex items-stretch gap-3 pixel-panel p-3 w-[calc(100%-24px)] max-w-[640px]'
+    : 'absolute bottom-10 left-10 z-20 flex items-center gap-4 pixel-panel p-4';
 
   const handleAgentClick = () => {
     setIsBypassMenuOpen(false);
@@ -82,12 +87,11 @@ export function BottomToolbar({
   };
 
   return (
-    <div className="absolute bottom-10 left-10 z-20 flex items-center gap-4 pixel-panel p-4">
-      {/* Hide + Agent in standalone browser mode (no terminal to interact with) */}
-      {!isBrowserRuntime && (
+    <div className={toolbarClass}>
+      {!isBrowserRuntime ? (
         <div
           ref={folderPickerRef}
-          className="relative"
+          className={isCompactMobile ? 'relative flex-1 min-w-0' : 'relative'}
           onMouseEnter={handleAgentHover}
           onMouseLeave={handleAgentLeave}
         >
@@ -96,8 +100,8 @@ export function BottomToolbar({
             onClick={handleAgentClick}
             className={
               isFolderPickerOpen || isBypassMenuOpen
-                ? 'bg-accent-bright'
-                : 'bg-accent hover:bg-accent-bright'
+                ? `bg-accent-bright ${isCompactMobile ? 'w-full text-center' : ''}`
+                : `bg-accent hover:bg-accent-bright ${isCompactMobile ? 'w-full text-center' : ''}`
             }
           >
             + Agent
@@ -119,11 +123,20 @@ export function BottomToolbar({
             ))}
           </Dropdown>
         </div>
+      ) : (
+        <div
+          className={`border-2 border-border bg-bg-alt text-text-muted uppercase tracking-wide ${
+            isCompactMobile ? 'flex-1 min-w-0 px-6 py-4 text-2xs text-center' : 'px-10 py-6 text-xs'
+          }`}
+        >
+          Browser-first mode
+        </div>
       )}
       <Button
         variant={isEditMode ? 'active' : 'default'}
         onClick={onToggleEditMode}
         title="Edit office layout"
+        className={isCompactMobile ? 'flex-1 px-0 text-center' : ''}
       >
         Layout
       </Button>
@@ -131,6 +144,7 @@ export function BottomToolbar({
         variant={isSettingsOpen ? 'active' : 'default'}
         onClick={onToggleSettings}
         title="Settings"
+        className={isCompactMobile ? 'flex-1 px-0 text-center' : ''}
       >
         Settings
       </Button>

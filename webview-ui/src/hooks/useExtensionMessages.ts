@@ -72,6 +72,38 @@ interface ExtensionMessageState {
   hooksInfoShown: boolean;
 }
 
+function telegramToolForEvent(eventType: string): string | null {
+  switch (eventType) {
+    case 'message_received':
+      return 'TelegramRead';
+    case 'message_sent':
+      return 'TelegramReply';
+    case 'thinking':
+      return 'TelegramReply';
+    case 'waiting':
+    case 'idle':
+    default:
+      return null;
+  }
+}
+
+function telegramStatusText(eventType: string, chatLabel?: string, preview?: string): string {
+  const source = chatLabel ? ` · ${chatLabel}` : '';
+  const tail = preview ? `: ${preview}` : '';
+  switch (eventType) {
+    case 'message_received':
+      return `Crack the whip — Telegram ping${source}${tail}`;
+    case 'message_sent':
+      return `Back on the tools${source}${tail}`;
+    case 'thinking':
+      return `Marching to the worksite${source}${tail}`;
+    case 'waiting':
+      return `Hovering for the foreman${source}${tail}`;
+    default:
+      return 'Idle';
+  }
+}
+
 function saveAgentSeats(os: OfficeState): void {
   const seats: Record<number, { palette: number; hueShift: number; seatId: string | null }> = {};
   for (const ch of os.characters.values()) {
@@ -119,6 +151,8 @@ export function useExtensionMessages(
       hueShift?: number;
       seatId?: string;
       folderName?: string;
+      teamName?: string;
+      agentName?: string;
     }> = [];
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -151,6 +185,9 @@ export function useExtensionMessages(
         // Add buffered agents now that layout (and seats) are correct
         for (const p of pendingAgents) {
           os.addAgent(p.id, p.palette, p.hueShift, p.seatId, true, p.folderName);
+          if (p.teamName || p.agentName) {
+            os.setTeamInfo(p.id, p.teamName, p.agentName, false);
+          }
         }
         pendingAgents = [];
         layoutReadyRef.current = true;
@@ -166,6 +203,7 @@ export function useExtensionMessages(
         const folderName = msg.folderName as string | undefined;
         const isTeammate = msg.isTeammate as boolean | undefined;
         const teammateName = msg.teammateName as string | undefined;
+        const agentName = msg.agentName as string | undefined;
         const teammateParentId = msg.parentAgentId as number | undefined;
         const teamName = msg.teamName as string | undefined;
         setAgents((prev) => (prev.includes(id) ? prev : [...prev, id]));
@@ -189,6 +227,9 @@ export function useExtensionMessages(
           }
         } else {
           os.addAgent(id, undefined, undefined, undefined, undefined, folderName);
+          if (teamName || agentName) {
+            os.setTeamInfo(id, teamName, agentName, false);
+          }
         }
         saveAgentSeats(os);
       } else if (msg.type === 'agentClosed') {
@@ -224,16 +265,37 @@ export function useExtensionMessages(
           { palette?: number; hueShift?: number; seatId?: string }
         >;
         const folderNames = (msg.folderNames || {}) as Record<number, string>;
-        // Buffer agents — they'll be added in layoutLoaded after seats are built
+        const teamNames = (msg.teamNames || {}) as Record<number, string>;
+        const agentNames = (msg.agentNames || {}) as Record<number, string>;
         for (const id of incoming) {
           const m = meta[id];
-          pendingAgents.push({
+          const payload = {
             id,
             palette: m?.palette,
             hueShift: m?.hueShift,
             seatId: m?.seatId,
             folderName: folderNames[id],
-          });
+            teamName: teamNames[id],
+            agentName: agentNames[id],
+          };
+          if (layoutReadyRef.current) {
+            os.addAgent(
+              payload.id,
+              payload.palette,
+              payload.hueShift,
+              payload.seatId,
+              true,
+              payload.folderName,
+            );
+            if (payload.teamName || payload.agentName) {
+              os.setTeamInfo(payload.id, payload.teamName, payload.agentName, false);
+            }
+          } else {
+            pendingAgents.push(payload);
+          }
+        }
+        if (layoutReadyRef.current && incoming.length > 0) {
+          saveAgentSeats(os);
         }
         setAgents((prev) => {
           const ids = new Set(prev);
@@ -339,6 +401,37 @@ export function useExtensionMessages(
         if (status === 'waiting') {
           os.showWaitingBubble(id);
           playDoneSound();
+        } else if (status === 'idle') {
+          os.setAgentTool(id, null);
+        }
+      } else if (msg.type === 'telegramOfficeEvent') {
+        const id = msg.id as number;
+        const eventType = msg.eventType as string;
+        const preview = msg.preview as string | undefined;
+        const chatLabel = msg.chatLabel as string | undefined;
+        const statusText = telegramStatusText(eventType, chatLabel, preview);
+
+        if (eventType === 'idle') {
+          setAgentStatuses((prev) => {
+            if (!(id in prev)) return prev;
+            const next = { ...prev };
+            delete next[id];
+            return next;
+          });
+          os.clearTelegramEvent(id);
+          os.setAgentTool(id, null);
+        } else {
+          setAgentStatuses((prev) => ({ ...prev, [id]: statusText }));
+          os.showTelegramEvent(
+            id,
+            eventType as 'message_received' | 'message_sent' | 'thinking' | 'waiting' | 'idle',
+            preview,
+            chatLabel,
+          );
+          os.setAgentTool(id, telegramToolForEvent(eventType));
+          if (eventType === 'message_received') {
+            playDoneSound();
+          }
         }
       } else if (msg.type === 'agentToolPermission') {
         const id = msg.id as number;

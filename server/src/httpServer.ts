@@ -10,6 +10,7 @@ import type { AgentStateStore } from './agentStateStore.js';
 import type { AssetCache, SetHooksEnabledSideEffect } from './clientMessageHandler.js';
 import { handleClientMessage } from './clientMessageHandler.js';
 import { HOOK_API_PREFIX, MAX_HOOK_BODY_SIZE } from './constants.js';
+import { applyTelegramOfficeEvent, normalizeTelegramOfficeEvent } from './telegramEvents.js';
 import type { AgentState } from './types.js';
 
 /** Options for creating the HTTP + WebSocket server. */
@@ -75,6 +76,7 @@ export async function createHttpServer(options: HttpServerOptions): Promise<Http
 
   registerHealthRoute(app);
   registerHookRoute(app, options);
+  registerTelegramEventsRoute(app, options);
   registerWebSocketRoute(app, options);
 
   // ── Listen ──────────────────────────────────────────────────
@@ -129,6 +131,29 @@ function registerHookRoute(app: FastifyInstance, options: HttpServerOptions): vo
   );
 }
 
+function registerTelegramEventsRoute(app: FastifyInstance, options: HttpServerOptions): void {
+  app.post<{
+    Body: Record<string, unknown>;
+  }>('/api/telegram/events', { preHandler: bearerAuth(options.token) }, async (request, reply) => {
+    const normalized = normalizeTelegramOfficeEvent(request.body);
+    if (!normalized) {
+      reply.code(400).send({
+        error:
+          'Invalid Telegram office event. Expected rosterKey + eventType(message_received|message_sent|thinking|waiting|idle).',
+      });
+      return;
+    }
+
+    const result = applyTelegramOfficeEvent(options.store, normalized);
+    if (!result.ok) {
+      reply.code(404).send({ error: result.reason });
+      return;
+    }
+
+    reply.send({ ok: true, agentId: result.agentId, applied: normalized });
+  });
+}
+
 // ── WebSocket ──────────────────────────────────────────────────
 
 function registerWebSocketRoute(app: FastifyInstance, options: HttpServerOptions): void {
@@ -158,9 +183,11 @@ function registerWebSocketRoute(app: FastifyInstance, options: HttpServerOptions
         isExternal: agent.isExternal || undefined,
         isTeammate: agent.leadAgentId !== undefined || undefined,
         teammateName: agent.agentName,
+        agentName: agent.agentName,
         parentAgentId: agent.leadAgentId,
         teamName: agent.teamName,
         hooksOnly: agent.hooksOnly || undefined,
+        sourceKind: agent.sourceKind,
       });
     };
 

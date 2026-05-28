@@ -36,6 +36,10 @@
   --color-status-active: #3794ff;
   --color-status-success: #89d185;
   --color-status-error: var(--color-danger);
+  --color-banner-lounge: rgba(98, 66, 33, 0.92);
+  --color-banner-worksite: rgba(141, 92, 15, 0.94);
+  --color-banner-border: rgba(255, 255, 255, 0.35);
+  --color-banner-muted: rgba(255, 255, 255, 0.82);
 
   /* Shadow */
   --shadow-pixel: 2px 2px 0px #0a0a14;
@@ -83,6 +87,10 @@
   --color-status-active: var(--color-status-active);
   --color-status-success: var(--color-status-success);
   --color-status-error: var(--color-status-error);
+  --color-banner-lounge: var(--color-banner-lounge);
+  --color-banner-worksite: var(--color-banner-worksite);
+  --color-banner-border: var(--color-banner-border);
+  --color-banner-muted: var(--color-banner-muted);
 
   /* Shadow */
   --shadow-pixel: var(--shadow-pixel);
@@ -93,10 +101,23 @@
   body,
   #root {
     @apply m-0 w-full h-full overflow-hidden font-pixel text-base text-text;
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
   }
 
   * {
     @apply font-pixel;
+    box-sizing: border-box;
+  }
+
+  button,
+  [role='button'] {
+    touch-action: manipulation;
+  }
+
+  canvas {
+    touch-action: none;
+    image-rendering: pixelated;
   }
 }
 

@@ -166,6 +166,14 @@ export interface Character {
   bubbleType: 'permission' | 'waiting' | null;
   /** Countdown timer for bubble (waiting: 2→0, permission: unused) */
   bubbleTimer: number;
+  /** Latest Telegram-driven office event, if any */
+  telegramEventType?: 'message_received' | 'message_sent' | 'thinking' | 'waiting' | 'idle' | null;
+  /** Short chat/source label for the latest Telegram event */
+  telegramChatLabel?: string;
+  /** Short message preview for the latest Telegram event */
+  telegramPreview?: string;
+  /** Countdown timer for transient Telegram overlays */
+  telegramEventTimer: number;
   /** Timer to stay seated while inactive after seat reassignment (counts down to 0) */
   seatTimer: number;
   /** Whether this character represents a sub-agent (spawned by Task tool) */

@@ -20,7 +20,7 @@ import { EditorState } from './office/editor/editorState.js';
 import { EditorToolbar } from './office/editor/EditorToolbar.js';
 import { OfficeState } from './office/engine/officeState.js';
 import { isRotatable } from './office/layout/furnitureCatalog.js';
-import { EditTool, type OfficeLayout,TILE_SIZE, TileType } from './office/types.js';
+import { EditTool, type OfficeLayout, TILE_SIZE, TileType } from './office/types.js';
 import { isBrowserRuntime } from './runtime.js';
 import { transport } from './transport/index.js';
 
@@ -190,26 +190,28 @@ function App() {
     const demos = [
       {
         tool: 'TelegramReply',
-        run: (id: number) => os.showTelegramEvent(id, 'thinking', 'Drafting reply', 'Demo'),
+        eventType: 'thinking' as const,
+        preview: 'Drafting reply',
       },
       {
         tool: 'Bash',
-        run: () => undefined,
+        eventType: null,
+        preview: null,
       },
       {
         tool: 'TelegramRead',
-        run: (id: number) => os.showTelegramEvent(id, 'message_received', 'Incoming ping', 'Demo'),
+        eventType: 'message_received' as const,
+        preview: 'Incoming ping',
       },
       {
         tool: 'TelegramReply',
-        run: (id: number) => os.showTelegramEvent(id, 'message_sent', 'Sent update', 'Demo'),
+        eventType: 'message_sent' as const,
+        preview: 'Sent update',
       },
       {
         tool: null,
-        run: (id: number) => {
-          os.showWaitingBubble(id);
-          os.showTelegramEvent(id, 'waiting', 'Awaiting approval', 'Demo');
-        },
+        eventType: 'waiting' as const,
+        preview: 'Awaiting approval',
       },
     ] as const;
 
@@ -219,7 +221,13 @@ function App() {
       os.clearTelegramEvent(character.id);
       os.clearPermissionBubble(character.id);
       os.setAgentTool(character.id, demo.tool);
-      demo.run(character.id);
+      if (demo.eventType === 'waiting') {
+        os.showWaitingBubble(character.id);
+      }
+      if (demo.eventType) {
+        os.showTelegramEvent(character.id, demo.eventType, demo.preview ?? undefined, 'Demo');
+        os.triggerTelegramOfficeReaction(character.id, demo.eventType);
+      }
     }
 
     setDemoBubbleTick((tick) => tick + 1);
@@ -231,7 +239,9 @@ function App() {
         os.clearTelegramEvent(character.id);
       }
       setDemoBubbleTick((tick) => tick + 1);
-      demoBubbleTimersRef.current = demoBubbleTimersRef.current.filter((timer) => timer !== resetTimer);
+      demoBubbleTimersRef.current = demoBubbleTimersRef.current.filter(
+        (timer) => timer !== resetTimer,
+      );
     }, 6500);
 
     demoBubbleTimersRef.current.push(resetTimer);

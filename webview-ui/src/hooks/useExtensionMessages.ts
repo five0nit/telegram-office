@@ -419,6 +419,7 @@ export function useExtensionMessages(
             return next;
           });
           os.clearTelegramEvent(id);
+          os.triggerTelegramOfficeReaction(id, 'idle');
           os.setAgentTool(id, null);
         } else {
           setAgentStatuses((prev) => ({ ...prev, [id]: statusText }));
@@ -427,6 +428,10 @@ export function useExtensionMessages(
             eventType as 'message_received' | 'message_sent' | 'thinking' | 'waiting' | 'idle',
             preview,
             chatLabel,
+          );
+          os.triggerTelegramOfficeReaction(
+            id,
+            eventType as 'message_received' | 'message_sent' | 'thinking' | 'waiting' | 'idle',
           );
           os.setAgentTool(id, telegramToolForEvent(eventType));
           if (eventType === 'message_received') {

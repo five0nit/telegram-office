@@ -33,6 +33,10 @@ import type {
 import { CharacterState, Direction, MATRIX_EFFECT_DURATION, TILE_SIZE } from '../types.js';
 import { createCharacter, updateCharacter } from './characters.js';
 import { matrixEffectSeeds } from './matrixEffect.js';
+import {
+  selectTelegramReactionDestination,
+  type TelegramOfficeReactionEventType,
+} from './telegramOfficeReactions.js';
 
 const TELEGRAM_EVENT_DURATION_SEC = 6;
 
@@ -166,7 +170,9 @@ export class OfficeState {
   private computeIdleHangoutTiles(): Array<{ col: number; row: number }> {
     const splitCol = Math.max(1, Math.floor(this.layout.cols / 2) - 1);
     const minRow = Math.max(1, Math.floor(this.layout.rows * 0.58));
-    const hangoutTiles = this.walkableTiles.filter((tile) => tile.col < splitCol && tile.row >= minRow);
+    const hangoutTiles = this.walkableTiles.filter(
+      (tile) => tile.col < splitCol && tile.row >= minRow,
+    );
     return hangoutTiles.length > 0 ? hangoutTiles : this.walkableTiles;
   }
 
@@ -443,6 +449,53 @@ export class OfficeState {
     ch.frame = 0;
     ch.frameTimer = 0;
     return true;
+  }
+
+  private getSeatTile(ch: Character): { col: number; row: number } | null {
+    if (!ch.seatId) return null;
+    const seat = this.seats.get(ch.seatId);
+    if (!seat) return null;
+    return { col: seat.seatCol, row: seat.seatRow };
+  }
+
+  private getOccupiedCharacterTiles(exceptId?: number): Set<string> {
+    const occupied = new Set<string>();
+    for (const other of this.characters.values()) {
+      if (other.id === exceptId || other.matrixEffect === 'despawn') continue;
+      occupied.add(`${other.tileCol},${other.tileRow}`);
+    }
+    return occupied;
+  }
+
+  triggerTelegramOfficeReaction(id: number, eventType: TelegramOfficeReactionEventType): void {
+    const ch = this.characters.get(id);
+    if (!ch || ch.isSubagent) return;
+
+    if (eventType === 'thinking' || eventType === 'idle') {
+      if (ch.seatId) this.sendToSeat(id);
+      return;
+    }
+
+    const destination = selectTelegramReactionDestination({
+      agentId: Math.abs(id),
+      eventType,
+      layoutCols: this.layout.cols,
+      layoutRows: this.layout.rows,
+      walkableTiles: this.walkableTiles,
+      occupiedTiles: this.getOccupiedCharacterTiles(id),
+      currentTile: { col: ch.tileCol, row: ch.tileRow },
+      preferredSeatTile: this.getSeatTile(ch),
+    });
+
+    if (!destination) {
+      if (eventType === 'waiting' && ch.seatId) this.sendToSeat(id);
+      return;
+    }
+
+    const moved = this.walkToTile(id, destination.col, destination.row);
+    if (!moved && eventType === 'waiting' && ch.seatId) {
+      this.sendToSeat(id);
+    }
   }
 
   /** Create a sub-agent character with the parent's palette. Returns the sub-agent ID. */

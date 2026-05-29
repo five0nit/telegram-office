@@ -82,6 +82,16 @@ export const BUTTON_ICON_COLOR = '#fff';
 export const CANVAS_FALLBACK_TILE_COLOR = '#444';
 export const CANVAS_ERROR_TILE_COLOR = '#FF00FF';
 export const WALL_COLOR = '#3A3A5C';
+export const TELEGRAM_ZONE_INBOX_ACCENT = '#35C2FF';
+export const TELEGRAM_ZONE_INBOX_FILL = 'rgba(53, 194, 255, 0.18)';
+export const TELEGRAM_ZONE_DISPATCH_ACCENT = '#7E7BFF';
+export const TELEGRAM_ZONE_DISPATCH_FILL = 'rgba(126, 123, 255, 0.16)';
+export const TELEGRAM_ZONE_HUDDLE_ACCENT = '#FFB84D';
+export const TELEGRAM_ZONE_HUDDLE_FILL = 'rgba(255, 184, 77, 0.16)';
+export const TELEGRAM_ZONE_QUEUE_ACCENT = '#66E38C';
+export const TELEGRAM_ZONE_QUEUE_FILL = 'rgba(102, 227, 140, 0.16)';
+export const TELEGRAM_ZONE_PANEL_BG = 'rgba(7, 12, 24, 0.82)';
+export const TELEGRAM_ZONE_PANEL_TEXT = '#EAF6FF';
 
 // ── Camera ───────────────────────────────────────────────────
 export const CAMERA_FOLLOW_LERP = 0.1;

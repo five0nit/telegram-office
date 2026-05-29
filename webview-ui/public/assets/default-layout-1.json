@@ -2,7 +2,7 @@
   "version": 1,
   "cols": 21,
   "rows": 22,
-  "layoutRevision": 3,
+  "layoutRevision": 4,
   "tiles": [
     255,
     255,
@@ -2239,31 +2239,31 @@
     {
       "uid": "work-break-bench-a",
       "type": "WOODEN_BENCH",
-      "col": 12,
-      "row": 20
+      "col": 8,
+      "row": 14
     },
     {
       "uid": "work-break-table",
       "type": "SMALL_TABLE_FRONT",
-      "col": 13,
-      "row": 19
+      "col": 9,
+      "row": 13
     },
     {
       "uid": "work-break-bench-b",
       "type": "WOODEN_BENCH",
-      "col": 15,
-      "row": 20
+      "col": 11,
+      "row": 14
     },
     {
       "uid": "work-bin",
       "type": "BIN",
-      "col": 18,
+      "col": 19,
       "row": 20
     },
     {
       "uid": "work-plant",
       "type": "LARGE_PLANT",
-      "col": 18,
+      "col": 17,
       "row": 19
     },
     {
@@ -2299,26 +2299,26 @@
     {
       "uid": "decor-whiteboard",
       "type": "WHITEBOARD",
-      "col": 14,
+      "col": 9,
       "row": 9
     },
     {
       "uid": "decor-large-painting",
       "type": "LARGE_PAINTING",
-      "col": 16,
+      "col": 14,
       "row": 9
     },
     {
       "uid": "decor-small-painting-2",
       "type": "SMALL_PAINTING_2",
-      "col": 19,
+      "col": 18,
       "row": 9
     },
     {
       "uid": "decor-divider-plant",
       "type": "PLANT_2",
       "col": 10,
-      "row": 18
+      "row": 16
     }
   ]
 }

@@ -30,6 +30,8 @@ import {
   SELECTED_OUTLINE_ALPHA,
   SELECTION_DASH_PATTERN,
   SELECTION_HIGHLIGHT_COLOR,
+  TELEGRAM_ZONE_PANEL_BG,
+  TELEGRAM_ZONE_PANEL_TEXT,
   THOUGHT_BUBBLE_BULB_BASE_COLOR,
   THOUGHT_BUBBLE_BULB_COLOR,
   THOUGHT_BUBBLE_FILL_COLOR,
@@ -62,6 +64,12 @@ import { CharacterState, TILE_SIZE, TileType } from '../types.js';
 import { getWallInstances, hasWallSprites, wallColorToHex } from '../wallTiles.js';
 import { getCharacterSprite } from './characters.js';
 import { renderMatrixEffect } from './matrixEffect.js';
+import {
+  getTelegramOfficeZoneForEvent,
+  getTelegramOfficeZoneSpecs,
+  type TelegramOfficeZoneId,
+  type TelegramOfficeZoneSpec,
+} from './telegramOfficeReactions.js';
 
 // ── Render functions ────────────────────────────────────────────
 
@@ -523,8 +531,7 @@ function renderBubbles(
     const sittingOff = ch.state === CharacterState.TYPE ? BUBBLE_SITTING_OFFSET_PX : 0;
 
     if (bubbleKind === 'permission' || bubbleKind === 'waiting') {
-      const sprite =
-        bubbleKind === 'permission' ? BUBBLE_PERMISSION_SPRITE : BUBBLE_WAITING_SPRITE;
+      const sprite = bubbleKind === 'permission' ? BUBBLE_PERMISSION_SPRITE : BUBBLE_WAITING_SPRITE;
       const cached = getCachedSprite(sprite, zoom);
       const bubbleX = Math.round(offsetX + ch.x * zoom - cached.width / 2);
       const bubbleY = Math.round(
@@ -689,6 +696,147 @@ export interface SelectionRenderState {
   characters: Map<number, Character>;
 }
 
+interface TelegramZoneRenderState {
+  spec: TelegramOfficeZoneSpec;
+  count: number;
+  active: boolean;
+}
+
+function getTelegramZoneCounts(
+  characters: Character[],
+  cols: number,
+  rows: number,
+): TelegramZoneRenderState[] {
+  const zones = getTelegramOfficeZoneSpecs(cols, rows);
+  const counts = new Map<TelegramOfficeZoneId, number>([
+    ['inbox', 0],
+    ['dispatch', 0],
+    ['huddle', 0],
+    ['queue', 0],
+  ]);
+
+  for (const ch of characters) {
+    if (!ch.telegramEventType || ch.telegramEventType === 'idle') continue;
+    const zone = getTelegramOfficeZoneForEvent(ch.telegramEventType, cols, rows);
+    counts.set(zone.id, (counts.get(zone.id) ?? 0) + 1);
+  }
+
+  return Object.values(zones).map((spec) => ({
+    spec,
+    count: counts.get(spec.id) ?? 0,
+    active: (counts.get(spec.id) ?? 0) > 0,
+  }));
+}
+
+function renderTelegramZonePads(
+  ctx: CanvasRenderingContext2D,
+  characters: Character[],
+  cols: number,
+  rows: number,
+  offsetX: number,
+  offsetY: number,
+  zoom: number,
+): void {
+  const s = TILE_SIZE * zoom;
+  const time = Date.now() / 1000;
+
+  for (const zone of getTelegramZoneCounts(characters, cols, rows)) {
+    const widthTiles = zone.spec.bounds.colMax - zone.spec.bounds.colMin + 1;
+    const heightTiles = zone.spec.bounds.rowMax - zone.spec.bounds.rowMin + 1;
+    const x = offsetX + zone.spec.bounds.colMin * s;
+    const y = offsetY + zone.spec.bounds.rowMin * s;
+    const w = widthTiles * s;
+    const h = heightTiles * s;
+    const pulse = zone.active ? 0.14 + 0.06 * Math.sin(time * 4 + widthTiles) : 0.08;
+
+    ctx.save();
+    ctx.globalAlpha = Math.max(0.06, pulse);
+    ctx.fillStyle = zone.spec.fill;
+    ctx.fillRect(x, y, w, h);
+    ctx.restore();
+
+    ctx.save();
+    ctx.strokeStyle = zone.spec.accent;
+    ctx.globalAlpha = zone.active ? 0.85 : 0.3;
+    ctx.lineWidth = Math.max(1.5, zoom * 0.75);
+    ctx.setLineDash([Math.max(4, zoom * 2), Math.max(3, zoom * 1.5)]);
+    ctx.strokeRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2));
+    ctx.restore();
+
+    const labelSize = Math.max(9, Math.round(zoom * 5.5));
+    ctx.save();
+    ctx.font = `700 ${labelSize}px monospace`;
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = zone.spec.accent;
+    ctx.globalAlpha = zone.active ? 0.9 : 0.45;
+    ctx.fillText(zone.spec.shortLabel, x + Math.max(4, zoom * 2), y + Math.max(3, zoom * 1.5));
+    ctx.restore();
+  }
+}
+
+function renderTelegramZoneSignals(
+  ctx: CanvasRenderingContext2D,
+  characters: Character[],
+  cols: number,
+  rows: number,
+  offsetX: number,
+  offsetY: number,
+  zoom: number,
+): void {
+  const s = TILE_SIZE * zoom;
+  const time = Date.now() / 1000;
+
+  for (const zone of getTelegramZoneCounts(characters, cols, rows)) {
+    const centerX = offsetX + (zone.spec.bounds.colMin + zone.spec.bounds.colMax + 1) * 0.5 * s;
+    const topY = offsetY + zone.spec.bounds.rowMin * s;
+    const lampRadius = Math.max(4, zoom * 1.8);
+    const pulseScale = zone.active ? 1 + 0.16 * Math.sin(time * 6 + zone.count) : 1;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(centerX, topY + Math.max(6, zoom * 2.5), lampRadius * pulseScale, 0, Math.PI * 2);
+    ctx.fillStyle = zone.spec.accent;
+    ctx.globalAlpha = zone.active ? 0.95 : 0.28;
+    ctx.fill();
+    ctx.restore();
+
+    if (zone.count >= 2) {
+      ctx.save();
+      ctx.strokeStyle = zone.spec.accent;
+      ctx.globalAlpha = 0.45;
+      ctx.lineWidth = Math.max(1.5, zoom * 0.7);
+      ctx.setLineDash([Math.max(4, zoom * 1.5), Math.max(4, zoom * 1.5)]);
+      ctx.strokeRect(
+        offsetX + zone.spec.bounds.colMin * s + Math.max(3, zoom),
+        offsetY + zone.spec.bounds.rowMin * s + Math.max(3, zoom),
+        (zone.spec.bounds.colMax - zone.spec.bounds.colMin + 1) * s - Math.max(6, zoom * 2),
+        (zone.spec.bounds.rowMax - zone.spec.bounds.rowMin + 1) * s - Math.max(6, zoom * 2),
+      );
+      ctx.restore();
+    }
+
+    const panelW = Math.max(44, Math.round(zoom * 18));
+    const panelH = Math.max(18, Math.round(zoom * 8));
+    const panelX = centerX - panelW / 2;
+    const panelY = topY + Math.max(12, zoom * 4);
+
+    ctx.save();
+    ctx.fillStyle = TELEGRAM_ZONE_PANEL_BG;
+    ctx.strokeStyle = zone.spec.accent;
+    ctx.lineWidth = 1.5;
+    ctx.fillRect(panelX, panelY, panelW, panelH);
+    ctx.strokeRect(panelX + 0.5, panelY + 0.5, panelW - 1, panelH - 1);
+    ctx.font = `600 ${Math.max(8, Math.round(zoom * 4.25))}px monospace`;
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = TELEGRAM_ZONE_PANEL_TEXT;
+    ctx.fillText(zone.spec.label, panelX + 4, panelY + panelH / 2);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = zone.spec.accent;
+    ctx.fillText(String(zone.count), panelX + panelW - 4, panelY + panelH / 2);
+    ctx.restore();
+  }
+}
+
 export function renderFrame(
   ctx: CanvasRenderingContext2D,
   canvasWidth: number,
@@ -721,6 +869,9 @@ export function renderFrame(
   // Draw tiles (floor + wall base color)
   renderTileGrid(ctx, tileMap, offsetX, offsetY, zoom, tileColors, layoutCols);
 
+  // Telegram activity pads/rugs sit on the floor to make the office feel more alive.
+  renderTelegramZonePads(ctx, characters, cols, rows, offsetX, offsetY, zoom);
+
   // Seat indicators (below furniture/characters, on top of floor)
   if (selection) {
     renderSeatIndicators(
@@ -746,6 +897,9 @@ export function renderFrame(
 
   // Speech bubbles (always on top of characters)
   renderBubbles(ctx, characters, offsetX, offsetY, zoom);
+
+  // Counters, lamps, and huddle highlights sit above the characters.
+  renderTelegramZoneSignals(ctx, characters, cols, rows, offsetX, offsetY, zoom);
 
   // Editor overlays
   if (editor) {

@@ -471,7 +471,7 @@ export class OfficeState {
     const ch = this.characters.get(id);
     if (!ch || ch.isSubagent) return;
 
-    if (eventType === 'thinking' || eventType === 'idle') {
+    if (eventType === 'idle') {
       if (ch.seatId) this.sendToSeat(id);
       return;
     }

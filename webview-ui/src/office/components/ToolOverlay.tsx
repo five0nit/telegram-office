@@ -173,7 +173,8 @@ export function ToolOverlay({
         const showCompactBadge = hasTelegramEvent && !showExpandedCard;
         const subtitle =
           isSelected || isHovered
-            ? ch.telegramChatLabel || (activityText !== 'Idle' && activityText !== title ? activityText : null)
+            ? ch.telegramChatLabel ||
+              (activityText !== 'Idle' && activityText !== title ? activityText : null)
             : alwaysShowOverlay && ch.teamName && ch.teamName !== title
               ? ch.teamName
               : null;

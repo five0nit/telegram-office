@@ -136,7 +136,11 @@ describe('telegramLogMonitor', () => {
 
     expect(broadcasts).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ type: 'telegramOfficeEvent', id: 1, eventType: 'message_received' }),
+        expect.objectContaining({
+          type: 'telegramOfficeEvent',
+          id: 1,
+          eventType: 'message_received',
+        }),
         expect.objectContaining({ type: 'telegramOfficeEvent', id: 1, eventType: 'thinking' }),
         expect.objectContaining({ type: 'telegramOfficeEvent', id: 1, eventType: 'message_sent' }),
         expect.objectContaining({ type: 'telegramOfficeEvent', id: 1, eventType: 'idle' }),

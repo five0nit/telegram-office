@@ -146,7 +146,9 @@ async function main(): Promise<void> {
     runtime.hooksEnabled.current = adapter.getSetting('pixel-agents.hooksEnabled', true);
     runtime.watchAllSessions.current = adapter.getSetting('pixel-agents.watchAllSessions', false);
 
-    console.log('[Pixel Agents] Standalone browser mode started in passive mode (no hooks, no session scanning).');
+    console.log(
+      '[Pixel Agents] Standalone browser mode started in passive mode (no hooks, no session scanning).',
+    );
 
     console.log(`\n  Pixel Agents server running at http://${args.host}:${config.port}\n`);
 

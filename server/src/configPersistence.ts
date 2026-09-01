@@ -60,30 +60,16 @@ function getConfigFilePath(): string {
 function parseAdapterSettings(raw: unknown, defaults: AdapterSettings): AdapterSettings {
   const obj = (raw && typeof raw === 'object' ? raw : {}) as Partial<AdapterSettings>;
   return {
-    soundEnabled:
-      typeof obj.soundEnabled === 'boolean'
-        ? obj.soundEnabled
-        : defaults.soundEnabled,
+    soundEnabled: typeof obj.soundEnabled === 'boolean' ? obj.soundEnabled : defaults.soundEnabled,
     lastSeenVersion:
-      typeof obj.lastSeenVersion === 'string'
-        ? obj.lastSeenVersion
-        : defaults.lastSeenVersion,
+      typeof obj.lastSeenVersion === 'string' ? obj.lastSeenVersion : defaults.lastSeenVersion,
     alwaysShowLabels:
-      typeof obj.alwaysShowLabels === 'boolean'
-        ? obj.alwaysShowLabels
-        : defaults.alwaysShowLabels,
+      typeof obj.alwaysShowLabels === 'boolean' ? obj.alwaysShowLabels : defaults.alwaysShowLabels,
     watchAllSessions:
-      typeof obj.watchAllSessions === 'boolean'
-        ? obj.watchAllSessions
-        : defaults.watchAllSessions,
-    hooksEnabled:
-      typeof obj.hooksEnabled === 'boolean'
-        ? obj.hooksEnabled
-        : defaults.hooksEnabled,
+      typeof obj.watchAllSessions === 'boolean' ? obj.watchAllSessions : defaults.watchAllSessions,
+    hooksEnabled: typeof obj.hooksEnabled === 'boolean' ? obj.hooksEnabled : defaults.hooksEnabled,
     hooksInfoShown:
-      typeof obj.hooksInfoShown === 'boolean'
-        ? obj.hooksInfoShown
-        : defaults.hooksInfoShown,
+      typeof obj.hooksInfoShown === 'boolean' ? obj.hooksInfoShown : defaults.hooksInfoShown,
   };
 }
 

@@ -81,8 +81,12 @@ export function VersionIndicator({
             transition: `opacity ${WHATS_NEW_FADE_MS / 1000}s ease-out`,
           }}
         >
-          <div className={`flex justify-between items-center ${isCompactMobile ? 'gap-6' : 'gap-10'}`}>
-            <span className={`${isCompactMobile ? 'text-base' : 'text-lg'} text-accent-bright leading-none`}>
+          <div
+            className={`flex justify-between items-center ${isCompactMobile ? 'gap-6' : 'gap-10'}`}
+          >
+            <span
+              className={`${isCompactMobile ? 'text-base' : 'text-lg'} text-accent-bright leading-none`}
+            >
               Updated to v{currentMajorMinor}!
             </span>
             <Button variant="ghost" size="icon" onClick={handleDismiss} className="leading-none">

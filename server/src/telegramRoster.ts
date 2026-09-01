@@ -47,8 +47,14 @@ export function loadTelegramRoster(): TelegramRosterEntry[] {
         kind: typeof entry.kind === 'string' && entry.kind.trim() ? entry.kind.trim() : 'bot',
         enabled: entry.enabled !== false,
         notes: typeof entry.notes === 'string' ? entry.notes : undefined,
-        profile: typeof entry.profile === 'string' && entry.profile.trim() ? entry.profile.trim() : undefined,
-        logPath: typeof entry.logPath === 'string' && entry.logPath.trim() ? entry.logPath.trim() : undefined,
+        profile:
+          typeof entry.profile === 'string' && entry.profile.trim()
+            ? entry.profile.trim()
+            : undefined,
+        logPath:
+          typeof entry.logPath === 'string' && entry.logPath.trim()
+            ? entry.logPath.trim()
+            : undefined,
       });
     }
     return entries;
@@ -64,7 +70,11 @@ export function seedTelegramRosterAgents(store: AgentStateStore, projectDir: str
 
   let changed = false;
   for (const [id, agent] of store) {
-    if (agent.sourceKind === 'telegram-roster' && agent.rosterKey && !rosterKeys.has(agent.rosterKey)) {
+    if (
+      agent.sourceKind === 'telegram-roster' &&
+      agent.rosterKey &&
+      !rosterKeys.has(agent.rosterKey)
+    ) {
       store.delete(id);
       changed = true;
     }
